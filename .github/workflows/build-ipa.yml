@@ -1,0 +1,48 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:   # bấm "Run workflow" trên GitHub để chạy tay
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select latest available Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned) archive
+        run: |
+          xcodebuild archive \
+            -project ChatApp.xcodeproj \
+            -scheme ChatApp \
+            -archivePath build/ChatApp.xcarchive \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package .ipa (fake-signed, AltStore/SideStore sẽ ký lại khi cài)
+        run: |
+          mkdir -p build/Payload
+          cp -r build/ChatApp.xcarchive/Products/Applications/ChatApp.app build/Payload/
+          cd build && zip -r ChatApp.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatApp-ipa
+          path: build/ChatApp.ipa
